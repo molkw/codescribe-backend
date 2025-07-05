@@ -1,0 +1,16 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  GREETING: Hello, World!
+
+tasks:
+  install:
+    desc: "Install dependencies"
+    cmds:
+      - uv sync
+
+  start:
+    desc: "Start the application"
+    cmd: python main.py

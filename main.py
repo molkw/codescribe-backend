@@ -1,4 +1,5 @@
 # codescribe-backend/main.py
+# Debug version to see what's happening with AI calls
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -51,7 +52,7 @@ class AIDocumentationResponse(BaseModel):
     suggestions: List[str]
     architectural_patterns: List[str]
 
-# AI Service for qwen2.5-coder
+# Enhanced AI Service with debugging
 class CoderAIService:
     def __init__(self):
         self.ollama_url = "http://localhost:11434"
@@ -59,48 +60,97 @@ class CoderAIService:
     async def get_available_model(self) -> Optional[str]:
         """Check if qwen2.5-coder is available"""
         try:
+            print("🔍 DEBUG: Checking available models...")
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(f"{self.ollama_url}/api/tags")
                 if response.status_code == 200:
-                    models = [model["name"] for model in response.json().get("models", [])]
+                    models_data = response.json()
+                    models = [model["name"] for model in models_data.get("models", [])]
+                    print(f"🔍 DEBUG: Available models: {models}")
                     
                     # Prefer qwen2.5-coder
                     if "qwen2.5-coder:7b-instruct" in models:
+                        print("✅ DEBUG: Found qwen2.5-coder:7b-instruct")
                         return "qwen2.5-coder:7b-instruct"
                     
                     # Fallback to any available model
-                    return models[0] if models else None
-        except:
-            pass
-        return None
+                    if models:
+                        print(f"⚠️ DEBUG: Using fallback model: {models[0]}")
+                        return models[0]
+                    else:
+                        print("❌ DEBUG: No models found")
+                        return None
+                else:
+                    print(f"❌ DEBUG: Ollama API returned status {response.status_code}")
+                    return None
+        except Exception as e:
+            print(f"❌ DEBUG: Exception checking models: {e}")
+            return None
         
     async def analyze_code(self, prompt: str) -> Optional[str]:
         """Analyze code with qwen2.5-coder"""
+        print("🔍 DEBUG: Starting AI analysis...")
+        
         model = await self.get_available_model()
         if not model:
+            print("❌ DEBUG: No model available for analysis")
             return None
             
+        print(f"🔍 DEBUG: Using model: {model}")
+        print(f"🔍 DEBUG: Prompt length: {len(prompt)} characters")
+        print(f"🔍 DEBUG: Prompt preview: {prompt[:200]}...")
+        
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            request_data = {
+                "model": model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.1,
+                    "top_p": 0.9,
+                    "num_predict": 800
+                }
+            }
+            
+            print(f"🔍 DEBUG: Sending request to {self.ollama_url}/api/generate")
+            print(f"🔍 DEBUG: Request data: {json.dumps(request_data, indent=2)}")
+            
+            async with httpx.AsyncClient(timeout=180.0) as client:  # Increased from 90 to 180 seconds
                 response = await client.post(
                     f"{self.ollama_url}/api/generate",
-                    json={
-                        "model": model,
-                        "prompt": prompt,
-                        "stream": False,
-                        "options": {
-                            "temperature": 0.1,
-                            "top_p": 0.9,
-                            "num_predict": 800
-                        }
-                    }
+                    json=request_data
                 )
+                
+                print(f"🔍 DEBUG: Response status: {response.status_code}")
+                print(f"🔍 DEBUG: Response headers: {dict(response.headers)}")
+                
                 if response.status_code == 200:
                     result = response.json()
-                    return result.get("response", "")
+                    print(f"🔍 DEBUG: Response JSON keys: {list(result.keys())}")
+                    
+                    ai_response = result.get("response", "")
+                    print(f"🔍 DEBUG: AI response length: {len(ai_response)} characters")
+                    print(f"🔍 DEBUG: AI response preview: {ai_response[:300]}...")
+                    
+                    if ai_response:
+                        print("✅ DEBUG: AI analysis successful!")
+                        return ai_response
+                    else:
+                        print("❌ DEBUG: AI response is empty")
+                        return None
+                else:
+                    response_text = response.text
+                    print(f"❌ DEBUG: HTTP error {response.status_code}")
+                    print(f"❌ DEBUG: Response body: {response_text}")
+                    return None
+                    
+        except httpx.TimeoutException as e:
+            print(f"⏰ DEBUG: Timeout error: {e}")
+            return None
         except Exception as e:
-            print(f"AI analysis error: {e}")
-        return None
+            print(f"❌ DEBUG: Exception during AI analysis: {e}")
+            print(f"❌ DEBUG: Exception type: {type(e).__name__}")
+            return None
 
 ai_service = CoderAIService()
 
@@ -126,17 +176,21 @@ async def health_check():
 async def analyze_code(request: CodeAnalysisRequest):
     """Main endpoint for AI code analysis"""
     
-    print(f"📊 Analyzing project: {request.project_name} ({len(request.classes)} classes)")
+    print(f"📊 DEBUG: Analyzing project: {request.project_name} ({len(request.classes)} classes)")
     
     # Build analysis prompt
     prompt = create_analysis_prompt(request)
+    print(f"📊 DEBUG: Generated prompt for AI analysis")
     
     # Get AI analysis
+    print("📊 DEBUG: Calling AI service...")
     ai_response = await ai_service.analyze_code(prompt)
     
     if not ai_response:
+        print("📊 DEBUG: AI analysis failed, using fallback")
         return create_fallback_response(request)
     
+    print("📊 DEBUG: AI analysis succeeded, parsing response")
     return parse_ai_response(ai_response, request)
 
 def create_analysis_prompt(request: CodeAnalysisRequest) -> str:
@@ -179,10 +233,13 @@ Please provide analysis covering:
 
 Be practical and Spring Boot focused."""
     
+    print(f"🔍 DEBUG: Created prompt with {len(prompt)} characters")
     return prompt
 
 def parse_ai_response(ai_response: str, request: CodeAnalysisRequest) -> AIDocumentationResponse:
     """Parse AI response into structured format"""
+    
+    print(f"🔍 DEBUG: Parsing AI response with {len(ai_response)} characters")
     
     documentation = f"# 🤖 AI Analysis: {request.project_name}\n\n{ai_response}"
     
@@ -208,6 +265,8 @@ def parse_ai_response(ai_response: str, request: CodeAnalysisRequest) -> AIDocum
         suggestions = ["Add comprehensive API documentation", "Implement proper exception handling"]
     if not insights:
         insights = ["Code follows Spring Boot conventions"]
+    
+    print(f"🔍 DEBUG: Extracted {len(insights)} insights, {len(suggestions)} suggestions, {len(patterns)} patterns")
     
     return AIDocumentationResponse(
         documentation=documentation,
@@ -246,8 +305,10 @@ with {"good separation of concerns" if repositories > 0 else "simple structure"}
 
 if __name__ == "__main__":
     import uvicorn
-    print("🚀 Starting CodeScribe Backend")
+    print("🚀 Starting CodeScribe Backend (DEBUG MODE)")
     print("📊 Optimized for: qwen2.5-coder:7b-instruct")
     print("🌐 Server: http://localhost:8000")
     print("📋 Health: http://localhost:8000/api/v1/health")
+    print("🔬 Analysis: http://localhost:8000/api/v1/analyze-code")
+    print("🔍 Debug logs will show all AI communication details")
     uvicorn.run(app, host="0.0.0.0", port=8000)
