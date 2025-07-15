@@ -14,3 +14,20 @@ tasks:
   start:
     desc: "Start the application"
     cmd: python main.py
+
+  git:
+    desc: "Git commit"
+    cmds:
+      - git add .
+      - git commit -m "{{.m}}"
+    requires:
+      vars: [m]
+
+  git-push:
+    desc: "Git commit and push"
+    cmds:
+      - git add .
+      - git commit -m "{{.m}}"
+      - git push
+    requires:
+      vars: [m]
