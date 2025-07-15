@@ -15,7 +15,8 @@ tasks:
     desc: "Start the application"
     cmd: python main.py
 
-  git:
+  #task git m="your commit message"
+  git: 
     desc: "Git commit"
     cmds:
       - git add .
@@ -23,6 +24,7 @@ tasks:
     requires:
       vars: [m]
 
+  #task git-push m="your commit message"
   git-push:
     desc: "Git commit and push"
     cmds:
