@@ -30,3 +30,12 @@ class AIDocumentationResponse(BaseModel):
     insights: List[str]
     suggestions: List[str]
     architectural_patterns: List[str]
+
+# New Q&A models
+class QuestionRequest(BaseModel):
+    question: str
+    documentation_context: str
+
+class QuestionResponse(BaseModel):
+    answer: str
+    processed_locally: bool = False

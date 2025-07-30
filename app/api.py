@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
-from app.models import CodeAnalysisRequest, AIDocumentationResponse
+from app.models import CodeAnalysisRequest, AIDocumentationResponse, QuestionRequest, QuestionResponse
 from app.services import SimpleAIService
 from app.utils import parse_structured_response
 
@@ -30,7 +30,7 @@ async def health_check():
         "ollama_available": model is not None,
         "active_model": model,
         "code_optimized": "qwen2.5-coder" in (model or ""),
-        "features": ["structured_prompts", "section_parsing", "enhanced_analysis"]
+        "features": ["structured_prompts", "section_parsing", "enhanced_analysis", "qa_support"]
     }
 
 @app.post("/api/v1/analyze-code", response_model=AIDocumentationResponse)
@@ -84,4 +84,33 @@ Standard Spring Boot MVC pattern with clear separation between web, business, an
                 "Implement proper error handling"
             ],
             architectural_patterns=["Spring Boot MVC", "Layered Architecture"]
+        )
+
+@app.post("/api/v1/ask-question", response_model=QuestionResponse)
+async def ask_question(request: QuestionRequest):
+    print(f"\n💬 NEW Q&A REQUEST")
+    print(f"❓ Question: {request.question}")
+    print(f"📝 Context length: {len(request.documentation_context)} chars")
+    
+    try:
+        # Get AI response
+        ai_answer = await ai_service.ask_question(
+            question=request.question,
+            documentation_context=request.documentation_context
+        )
+        
+        print(f"✅ Q&A Response generated: {len(ai_answer)} chars")
+        
+        return QuestionResponse(
+            answer=ai_answer,
+            processed_locally=False
+        )
+        
+    except Exception as e:
+        print(f"❌ Q&A Error: {e}")
+        error_message = f"❌ Failed to process question: {str(e)}"
+        
+        return QuestionResponse(
+            answer=error_message,
+            processed_locally=False
         )

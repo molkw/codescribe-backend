@@ -108,3 +108,68 @@ Keep each section concise and focused. Base analysis on Spring Boot conventions 
         except Exception as e:
             print(f"❌ Error: {e}")
             return None
+
+    async def ask_question(self, question: str, documentation_context: str) -> str:
+        """Answer questions about the documentation using AI"""
+        model = await self.get_available_model()
+        if not model:
+            print("❌ No model available for Q&A")
+            return "❌ AI model unavailable. Please check Ollama service."
+
+        # Create a focused prompt for Q&A
+        prompt = f"""You are analyzing a Spring Boot project. Answer the user's question based on the documentation provided.
+
+DOCUMENTATION CONTEXT:
+{documentation_context}
+
+USER QUESTION: {question}
+
+Instructions:
+- Provide a clear, concise answer based only on the provided documentation
+- If the question asks for specific information (like counts, lists), be precise
+- If the documentation doesn't contain the answer, say so clearly
+- Keep responses focused and helpful
+
+ANSWER:"""
+
+        print(f"🤔 Processing Q&A with {model}...")
+        print(f"❓ Question: {question}")
+        print(f"📝 Context length: {len(documentation_context)} chars")
+
+        try:
+            request_data = {
+                "model": model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "num_predict": 200,  # Shorter responses for Q&A
+                    "temperature": 0.3,  # Lower temperature for more factual responses
+                    "top_p": 0.8
+                }
+            }
+
+            print("📡 Sending Q&A prompt to Ollama...")
+            async with httpx.AsyncClient(timeout=60.0) as client:  # Shorter timeout for Q&A
+                response = await client.post(
+                    f"{self.ollama_url}/api/generate",
+                    json=request_data
+                )
+
+                print(f"📊 Q&A Status: {response.status_code}")
+
+                if response.status_code == 200:
+                    result = response.json()
+                    ai_response = result.get("response", "").strip()
+                    print(f"✅ Q&A Response: {len(ai_response)} chars")
+                    
+                    if ai_response:
+                        return ai_response
+                    else:
+                        return "❌ AI returned empty response. Please try rephrasing your question."
+                else:
+                    print(f"❌ HTTP {response.status_code}: {response.text}")
+                    return f"❌ AI service error (Status: {response.status_code}). Please try again."
+                    
+        except Exception as e:
+            print(f"❌ Q&A Error: {e}")
+            return f"❌ Connection error: {e}. Please check if Ollama is running."
