@@ -1,3 +1,4 @@
+# app/utils.py
 from app.models import CodeAnalysisRequest, AIDocumentationResponse
 
 def parse_structured_response(ai_response: str, request: CodeAnalysisRequest) -> AIDocumentationResponse:

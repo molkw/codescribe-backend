@@ -1,3 +1,4 @@
+# app/services.py
 import httpx
 from typing import Optional
 from app.models import CodeAnalysisRequest
@@ -173,3 +174,72 @@ ANSWER:"""
         except Exception as e:
             print(f"❌ Q&A Error: {e}")
             return f"❌ Connection error: {e}. Please check if Ollama is running."
+
+    async def ask_project_question(self, question: str, project_context: str) -> str:
+        """Answer questions about the project using full source code context"""
+        model = await self.get_available_model()
+        if not model:
+            print("❌ No model available for project Q&A")
+            return "❌ AI model unavailable. Please check Ollama service."
+
+        # Create a focused prompt for project analysis
+        prompt = f"""You are analyzing a Spring Boot project. Answer the user's question based on the provided source code files.
+
+PROJECT SOURCE CODE:
+{project_context}
+
+USER QUESTION: {question}
+
+Instructions:
+- Examine the actual source code provided above
+- Give a direct, specific answer based on what you see in the code
+- If the question asks about configuration, look at .properties/.yml files
+- If the question asks about entities/models, examine @Entity classes
+- If the question asks about database, check datasource configuration and JPA setup
+- If the question asks about business logic, examine @Service classes
+- Be specific about file names, class names, and line references when relevant
+- Keep the answer concise but informative
+
+ANSWER:"""
+
+        print(f"🔍 Processing project Q&A with {model}...")
+        print(f"❓ Question: {question}")
+        print(f"📝 Project context length: {len(project_context)} chars")
+
+        try:
+            request_data = {
+                "model": model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "num_predict": 300,  # Longer responses for detailed analysis
+                    "temperature": 0.2,  # Very low temperature for factual code analysis
+                    "top_p": 0.7
+                }
+            }
+
+            print("📡 Sending project analysis prompt to Ollama...")
+            async with httpx.AsyncClient(timeout=120.0) as client:  # Extended timeout for large context
+                response = await client.post(
+                    f"{self.ollama_url}/api/generate",
+                    json=request_data
+                )
+
+                print(f"📊 Project Q&A Status: {response.status_code}")
+
+                if response.status_code == 200:
+                    result = response.json()
+                    ai_response = result.get("response", "").strip()
+                    print(f"✅ Project Q&A Response: {len(ai_response)} chars")
+                    
+                    if ai_response:
+                        return ai_response
+                    else:
+                        return "❌ AI returned empty response. The project context might be too large or complex."
+                else:
+                    print(f"❌ HTTP {response.status_code}: {response.text}")
+                    return f"❌ AI service error (Status: {response.status_code}). The request might be too large."
+                    
+        except Exception as e:
+            print(f"❌ Project Q&A Error: {e}")
+            return f"❌ Analysis error: {e}. This might be due to large project size or complexity."

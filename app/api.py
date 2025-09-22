@@ -1,7 +1,8 @@
+# app/api.py
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
-from app.models import CodeAnalysisRequest, AIDocumentationResponse, QuestionRequest, QuestionResponse
+from app.models import CodeAnalysisRequest, AIDocumentationResponse, QuestionRequest, ProjectQuestionRequest, QuestionResponse
 from app.services import SimpleAIService
 from app.utils import parse_structured_response
 
@@ -30,7 +31,7 @@ async def health_check():
         "ollama_available": model is not None,
         "active_model": model,
         "code_optimized": "qwen2.5-coder" in (model or ""),
-        "features": ["structured_prompts", "section_parsing", "enhanced_analysis", "qa_support"]
+        "features": ["structured_prompts", "section_parsing", "enhanced_analysis", "qa_support", "project_analysis"]
     }
 
 @app.post("/api/v1/analyze-code", response_model=AIDocumentationResponse)
@@ -109,6 +110,35 @@ async def ask_question(request: QuestionRequest):
     except Exception as e:
         print(f"❌ Q&A Error: {e}")
         error_message = f"❌ Failed to process question: {str(e)}"
+        
+        return QuestionResponse(
+            answer=error_message,
+            processed_locally=False
+        )
+
+@app.post("/api/v1/project-question", response_model=QuestionResponse)
+async def ask_project_question(request: ProjectQuestionRequest):
+    print(f"\n🔍 NEW PROJECT Q&A REQUEST")
+    print(f"❓ Question: {request.question}")
+    print(f"📝 Project context length: {len(request.project_context)} chars")
+    
+    try:
+        # Get AI response for project analysis
+        ai_answer = await ai_service.ask_project_question(
+            question=request.question,
+            project_context=request.project_context
+        )
+        
+        print(f"✅ Project Q&A Response generated: {len(ai_answer)} chars")
+        
+        return QuestionResponse(
+            answer=ai_answer,
+            processed_locally=False
+        )
+        
+    except Exception as e:
+        print(f"❌ Project Q&A Error: {e}")
+        error_message = f"❌ Failed to analyze project: {str(e)}\n\nThis might be due to large project size or AI processing limitations."
         
         return QuestionResponse(
             answer=error_message,

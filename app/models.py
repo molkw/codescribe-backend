@@ -1,3 +1,4 @@
+# app/models.py
 from pydantic import BaseModel
 from typing import List, Optional
 
@@ -35,6 +36,10 @@ class AIDocumentationResponse(BaseModel):
 class QuestionRequest(BaseModel):
     question: str
     documentation_context: str
+
+class ProjectQuestionRequest(BaseModel):
+    question: str
+    project_context: str
 
 class QuestionResponse(BaseModel):
     answer: str
